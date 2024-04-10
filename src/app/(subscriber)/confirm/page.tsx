@@ -1,9 +1,12 @@
+'use client'
+
 import ResendConfirmationButton from '@/components/subscriber/ResendConfirmationButton'
 import { createValidateEmailLink } from '@/lib/utils'
 import { redirect } from 'next/navigation'
 import { createPreferencesLink } from '@/lib/utils'
 import { getOneSubscriberByToken } from '@/lib/queries'
 import VerifiedStatus from '@/components/subscriber/VerifiedStatus'
+import { useState, useEffect } from 'react'
 
 interface ConfirmEmailProps {
   searchParams: {
@@ -12,23 +15,37 @@ interface ConfirmEmailProps {
 }
 
 //TODO: Add polling cycling to check email verification status
+// eslint-disable-next-line @next/next/no-async-client-component
 export default async function ConfirmEmail({
   searchParams,
 }: ConfirmEmailProps) {
-  const tokenFromParams = searchParams.token
+  const tokenFromParams: any = searchParams.token
+  const [email, setEmail] = useState('');
+  const [verified, setVerified] = useState(false);
 
-  if (!tokenFromParams) {
-    return redirect('/')
-  }
+  useEffect(() => {
+    const fetchSubscriber = async () => {
+      if (!tokenFromParams) {
+        return redirect('/');
+      }
+      const subscriber = await getOneSubscriberByToken(tokenFromParams);
+      if (!subscriber || !subscriber.email) {
+        return redirect('/');
+      }
+      setEmail(subscriber.email);
+      setVerified(subscriber.verified);
+    };
 
-  const subscriber = await getOneSubscriberByToken(tokenFromParams)
+    // Fetch subscriber details initially
+    fetchSubscriber();
 
-  if (!subscriber || !subscriber.email) {
-    return redirect('/')
-  }
+    // Polling cycle to check email verification status every 5 seconds
+    const intervalId = setInterval(fetchSubscriber, 5000);
 
-  const { email, verified } = subscriber
+    return () => clearInterval(intervalId);
+  }, [tokenFromParams]);
 
+  
   if (verified) {
     const preferencesLink = createPreferencesLink(tokenFromParams)
     return redirect(preferencesLink)
